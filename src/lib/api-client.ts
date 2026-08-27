@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { ApiResponse } from '@/types'
 
-const BASE_URL = 'https://portfolio-backend-qdf8.onrender.com'
+const BASE_URL = 'https://nova-backend-no5o.onrender.com'
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
