@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { ApiResponse } from '@/types'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+const BASE_URL = 'https://portfolio-backend-qdf8.onrender.com'
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
