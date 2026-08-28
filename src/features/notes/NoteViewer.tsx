@@ -3,6 +3,7 @@ import { Note } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Badge, ProcessingStatusBadge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
+import { getNotebookIcon } from '@/stores/notebook-store'
 import {
   Edit3,
   Trash2,
@@ -37,6 +38,12 @@ export function NoteViewer({
   onCreateNew,
   isLoading = false,
 }: NoteViewerProps) {
+  const notebook = note?.notebook
+  const notebookName = notebook?.name
+  const notebookIcon = notebook?.icon || getNotebookIcon(notebookName)
+
+
+
   if (isLoading) {
     return (
       <div className="flex-1 h-full p-8 space-y-6 overflow-y-auto animate-pulse">
@@ -152,8 +159,20 @@ export function NoteViewer({
 
             {/* Concepts and Tags Row */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
+              {notebookName && (
+                <Badge
+                  variant="secondary"
+                  className="text-xs py-1 px-2.5 bg-slate-800/90 text-slate-200 border-slate-700 gap-1.5 font-medium"
+                >
+                  <span>{notebookIcon}</span>
+                  <span>{notebookName}</span>
+                </Badge>
+              )}
+
+
               {note.concepts &&
                 note.concepts.map((concept) => (
+
                   <button
                     key={concept.id}
                     onClick={() => onConceptClick?.(concept.id)}

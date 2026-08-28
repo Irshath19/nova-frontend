@@ -4,6 +4,7 @@ import { Badge, ProcessingStatusBadge } from '@/components/ui/Badge'
 import { Note } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { FileText, Tag as TagIcon, Sparkles, ExternalLink } from 'lucide-react'
+import { getNotebookIcon } from '@/stores/notebook-store'
 
 interface NoteCardProps {
   note: Note
@@ -13,6 +14,10 @@ interface NoteCardProps {
 }
 
 export function NoteCard({ note, onClick, onTagClick, onConceptClick }: NoteCardProps) {
+  const notebook = note.notebook
+  const notebookName = notebook?.name
+  const notebookIcon = notebook?.icon || getNotebookIcon(notebookName)
+
   return (
     <Card
       onClick={onClick}
@@ -43,8 +48,17 @@ export function NoteCard({ note, onClick, onTagClick, onConceptClick }: NoteCard
       </div>
 
       <div>
-        {/* Concepts and Tags */}
+        {/* NoteBook, Concepts and Tags */}
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          {notebookName && (
+            <Badge variant="secondary" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700 gap-1">
+              <span>{notebookIcon}</span>
+              <span className="max-w-[100px] truncate">{notebookName}</span>
+            </Badge>
+          )}
+
+
+
           {note.concepts.slice(0, 3).map((c) => (
             <span
               key={c.id}
@@ -74,6 +88,7 @@ export function NoteCard({ note, onClick, onTagClick, onConceptClick }: NoteCard
             </span>
           ))}
         </div>
+
 
         {/* Footer */}
         <div className="flex items-center justify-between text-[11px] text-muted-foreground/70 pt-2 border-t border-border/40">

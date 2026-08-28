@@ -6,6 +6,8 @@ import { TipTapEditor } from '@/features/notes/TipTapEditor'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { NoteBook } from '@/types'
+import { getNotebookIcon } from '@/stores/notebook-store'
 import {
   X,
   Sparkles,
@@ -38,6 +40,9 @@ export interface NoteDrawerProps {
   isSaving?: boolean
   isSummarizing?: boolean
   onTriggerAISummarizer?: () => void
+  notebookId?: string | null
+  setNotebookId?: (id: string | null) => void
+  notebooks?: NoteBook[]
 }
 
 /**
@@ -62,18 +67,25 @@ export function NoteDrawer({
   isSaving = false,
   isSummarizing = false,
   onTriggerAISummarizer,
+  notebookId,
+  setNotebookId,
+  notebooks = [],
 }: NoteDrawerProps) {
   const [tagInput, setTagInput] = useState('')
   const [activeMobileTab, setActiveMobileTab] = useState<'write' | 'preview'>('write')
   const [debouncedContent, setDebouncedContent] = useState(content)
   const modalRef = useRef<HTMLDivElement>(null)
 
+  const selectedNotebookObj = notebooks.find((nb) => nb.id === notebookId)
+  const currentNotebookName = selectedNotebookObj?.name || 'NoteBook'
+  const currentNotebookIcon = selectedNotebookObj?.icon || getNotebookIcon(selectedNotebookObj?.name)
+
   const onCloseRef = useRef(onClose)
   useEffect(() => {
     onCloseRef.current = onClose
   }, [onClose])
 
-  // Sync debounced content for smooth live preview rendering without editor typing lag
+  // Sync debounced content for smooth live preview rendering
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedContent(content)
@@ -81,7 +93,7 @@ export function NoteDrawer({
     return () => clearTimeout(timer)
   }, [content])
 
-  // Handle ESC key and focus trapping (only when isOpen changes)
+  // Handle ESC key
   useEffect(() => {
     if (!isOpen) return
 
@@ -94,7 +106,6 @@ export function NoteDrawer({
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', handleKeyDown)
 
-    // Focus only on initial open if active element is not already inside the modal
     if (modalRef.current && !modalRef.current.contains(document.activeElement)) {
       modalRef.current.focus()
     }
@@ -112,8 +123,7 @@ export function NoteDrawer({
     }
   }, [isOpen])
 
-
-  // Calculate statistics (word count & character count)
+  // Calculate statistics
   const stats = useMemo(() => {
     const plainText = content
       .replace(/<[^>]*>?/gm, ' ')
@@ -192,7 +202,7 @@ export function NoteDrawer({
             </div>
           </div>
 
-          {/* Responsive Mobile / Tablet Tab Switcher (Visible only below lg breakpoint) */}
+          {/* Responsive Mobile Tab Switcher */}
           <div className="flex lg:hidden items-center bg-slate-800/90 border border-slate-700 rounded-lg p-1">
             <button
               type="button"
@@ -236,7 +246,7 @@ export function NoteDrawer({
           </button>
         </header>
 
-        {/* Modal Body - Split-Pane Grid on Desktop / Tabbed Stack on Mobile */}
+        {/* Modal Body */}
         <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden p-4 sm:p-6 bg-slate-900/60">
           <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             {/* Left Pane (Editor) */}
@@ -264,23 +274,56 @@ export function NoteDrawer({
                 />
               </div>
 
-              {/* Source URL Input */}
-              <div className="space-y-1.5 shrink-0">
-                <label
-                  htmlFor="note-source-input"
-                  className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
-                >
-                  <Link2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Source URL / Documentation</span>
-                  <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <Input
-                  id="note-source-input"
-                  placeholder="https://example.com/docs/vector-search"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  className="text-xs h-9 bg-slate-950/60 border-slate-800 focus:border-nova-500 focus:bg-slate-950 text-slate-100 placeholder:text-slate-500"
-                />
+              {/* NoteBook Selector & Source URL Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
+                {/* NoteBook Selector (from notebooks table in DB) */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="note-notebook-select"
+                    className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                    <span>NoteBook</span>
+                  </label>
+
+                  <div className="relative">
+                    <select
+                      id="note-notebook-select"
+                      aria-label="NoteBook"
+                      value={notebookId || ''}
+                      onChange={(e) => setNotebookId?.(e.target.value || null)}
+                      className="w-full h-9 px-3 text-xs font-medium rounded-xl bg-slate-950/60 border border-slate-800 focus:border-nova-500 focus:bg-slate-950 text-slate-200 outline-none transition-colors"
+                    >
+                      <option value="" className="bg-slate-900 text-slate-400">
+                        None (Unassigned)
+                      </option>
+                      {notebooks.map((nb) => (
+                        <option key={nb.id} value={nb.id} className="bg-slate-900 text-slate-200">
+                          {nb.icon || '📚'} {nb.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Source URL Input */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="note-source-input"
+                    className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  >
+                    <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Source URL</span>
+                    <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <Input
+                    id="note-source-input"
+                    placeholder="https://example.com/docs"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="text-xs h-9 bg-slate-950/60 border-slate-800 focus:border-nova-500 focus:bg-slate-950 text-slate-100 placeholder:text-slate-500"
+                  />
+                </div>
               </div>
 
               {/* Tags Input */}
@@ -386,8 +429,18 @@ export function NoteDrawer({
                     )}
                   </h1>
 
-                  {/* Metadata preview row (Tags + Source) */}
+                  {/* Metadata preview row */}
                   <div className="flex flex-wrap items-center gap-2 mt-3 pt-1">
+                    {selectedNotebookObj && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[11px] py-0.5 px-2 bg-slate-800 text-slate-200 border-slate-700/80 gap-1 font-medium"
+                      >
+                        <span>{currentNotebookIcon}</span>
+                        <span>{currentNotebookName}</span>
+                      </Badge>
+                    )}
+
                     {tagsList.length > 0 ? (
                       tagsList.map((tag) => (
                         <Badge
@@ -442,7 +495,7 @@ export function NoteDrawer({
           </div>
         </div>
 
-        {/* Modal Sticky Footer - Action Buttons */}
+        {/* Modal Sticky Footer */}
         <footer className="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             {isEditing && onDelete && (

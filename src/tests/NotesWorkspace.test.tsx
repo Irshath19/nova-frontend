@@ -4,7 +4,13 @@ import React from 'react'
 import { NoteViewer } from '@/features/notes/NoteViewer'
 import { NotesSidebar } from '@/features/notes/NotesSidebar'
 import { NoteDrawer } from '@/features/notes/NoteDrawer'
-import { Note, Tag } from '@/types'
+import { Note, NoteBook, Tag } from '@/types'
+
+
+const mockNotebooks: NoteBook[] = [
+  { id: 'nb-1', name: 'AI Engineering', icon: '🤖' },
+  { id: 'nb-2', name: 'Backend', icon: '💻' },
+]
 
 const mockNote: Note = {
   id: 'note-1',
@@ -13,6 +19,8 @@ const mockNote: Note = {
   content: '<p>Retrieval Augmented Generation combines vector search with LLMs.</p>',
   summary: 'RAG connects external vector databases to LLM prompts.',
   source: 'https://nova.ai/docs',
+  notebook_id: 'nb-1',
+  notebook: mockNotebooks[0],
   processing_status: 'COMPLETED',
   created_at: '2026-08-27T10:00:00Z',
   updated_at: '2026-08-27T10:00:00Z',
@@ -28,6 +36,24 @@ const mockNote: Note = {
     },
   ],
 }
+
+const mockBackendNote: Note = {
+  id: 'note-2',
+  user_id: 'user-1',
+  title: 'Node.js Microservices Architecture',
+  content: '<p>Building event-driven microservices.</p>',
+  summary: 'Event-driven architecture with Kafka.',
+  source: '',
+  notebook_id: 'nb-2',
+  notebook: mockNotebooks[1],
+  processing_status: 'COMPLETED',
+  created_at: '2026-08-27T11:00:00Z',
+  updated_at: '2026-08-27T11:00:00Z',
+  tags: [],
+  concepts: [],
+}
+
+
 
 describe('Notes Knowledge Workspace', () => {
   it('renders NoteViewer with full title, summary callout, tags, concepts and content', () => {
@@ -145,5 +171,79 @@ describe('Notes Knowledge Workspace', () => {
     expect(writeTabBtn).toBeDefined()
     fireEvent.click(writeTabBtn)
   })
+
+  it('renders NoteBook selector in NotesSidebar, toggles dropdown and selects notebook', () => {
+    const handleSelect = vi.fn()
+    const handleOpenCreate = vi.fn()
+
+    render(
+      <NotesSidebar
+        notes={[mockNote, mockBackendNote]}
+        notebooks={mockNotebooks}
+        selectedNoteId="note-1"
+        onSelectNote={handleSelect}
+        onOpenCreateDrawer={handleOpenCreate}
+        search=""
+        setSearch={vi.fn()}
+        tags={[]}
+        selectedTag={null}
+        setSelectedTag={vi.fn()}
+      />
+    )
+
+    // Open NoteBook selector dropdown
+    const selectorBtn = screen.getByRole('button', { name: /all notebooks|ai engineering/i })
+    expect(selectorBtn).toBeDefined()
+    fireEvent.click(selectorBtn)
+
+    // Check dropdown options derived from notebooks table
+    expect(screen.getAllByText('AI Engineering').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Backend').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Create NoteBook')).toBeDefined()
+
+    // Select Backend notebook
+    const backendOptions = screen.getAllByText('Backend')
+    fireEvent.click(backendOptions[0])
+
+    // Verify Backend note is shown
+    expect(screen.getByText('Node.js Microservices Architecture')).toBeDefined()
+  })
+
+  it('renders NoteDrawer with NoteBook selector dropdown and updates preview', () => {
+    const handleClose = vi.fn()
+    const handleSave = vi.fn()
+    const setNotebookId = vi.fn()
+
+    render(
+      <NoteDrawer
+        isOpen={true}
+        onClose={handleClose}
+        isEditing={false}
+        title="Spring Boot Microservices"
+        setTitle={vi.fn()}
+        content="<p>Building microservices with Spring Cloud.</p>"
+        setContent={vi.fn()}
+        source=""
+        setSource={vi.fn()}
+        tagsList={['Java', 'Microservices']}
+        setTagsList={vi.fn()}
+        notebookId="nb-2"
+        setNotebookId={setNotebookId}
+        notebooks={mockNotebooks}
+        onSave={handleSave}
+      />
+    )
+
+    expect(screen.getByLabelText('NoteBook')).toBeDefined()
+    const select = screen.getByLabelText('NoteBook') as HTMLSelectElement
+    expect(select.value).toBe('nb-2')
+
+    fireEvent.change(select, { target: { value: 'nb-1' } })
+    expect(setNotebookId).toHaveBeenCalledWith('nb-1')
+  })
 })
+
+
+
+
 

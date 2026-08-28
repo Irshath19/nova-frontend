@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
-import { ApiResponse, Note, PaginatedResponse, SummarizeResponse, Tag } from '@/types'
+import { ApiResponse, Note, NoteBook, PaginatedResponse, SummarizeResponse, Tag } from '@/types'
 import { NotesSidebar } from '@/features/notes/NotesSidebar'
 import { NoteViewer } from '@/features/notes/NoteViewer'
 import { NoteDrawer } from '@/features/notes/NoteDrawer'
 import { AISummaryModal } from '@/features/notes/AISummaryModal'
+import { useNotebookStore } from '@/stores/notebook-store'
 
 export function NotesPage() {
   const queryClient = useQueryClient()
@@ -14,6 +15,9 @@ export function NotesPage() {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('detail')
 
+  // Notebook Store
+  const selectedNotebookId = useNotebookStore((state) => state.selectedNotebookId)
+
   // Drawer / Editor state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
@@ -21,12 +25,24 @@ export function NotesPage() {
   const [content, setContent] = useState('')
   const [source, setSource] = useState('')
   const [tagsList, setTagsList] = useState<string[]>([])
+  const [notebookId, setNotebookId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   // AI Summarizer State
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summaryData, setSummaryData] = useState<SummarizeResponse | null>(null)
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false)
+
+  // Fetch Notebooks from PostgreSQL notebooks table
+  const { data: notebooksData } = useQuery({
+    queryKey: ['notebooks'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<NoteBook[]>>('/notebooks')
+      return res.data.data
+    },
+  })
+
+  const notebooksList = notebooksData || []
 
   // Fetch Notes
   const { data: notesData, isLoading: isNotesLoading } = useQuery({
@@ -75,6 +91,9 @@ export function NotesPage() {
     setContent('<p></p>')
     setSource('')
     setTagsList([])
+    const defaultNbId =
+      selectedNotebookId !== 'all' ? selectedNotebookId : (notebooksList[0]?.id || null)
+    setNotebookId(defaultNbId)
     setIsDrawerOpen(true)
   }
 
@@ -84,6 +103,7 @@ export function NotesPage() {
     setContent(note.content)
     setSource(note.source || '')
     setTagsList(note.tags ? note.tags.map((t) => t.name) : [])
+    setNotebookId(note.notebook_id || note.notebook?.id || null)
     setIsDrawerOpen(true)
   }
 
@@ -97,6 +117,7 @@ export function NotesPage() {
           title,
           content,
           source: source || null,
+          notebook_id: notebookId || null,
           tag_names: tagsList,
         })
         setSelectedNoteId(res.data.data.id)
@@ -105,12 +126,14 @@ export function NotesPage() {
           title,
           content,
           source: source || null,
+          notebook_id: notebookId || null,
           tag_names: tagsList,
         })
         setSelectedNoteId(res.data.data.id)
       }
 
       await queryClient.invalidateQueries({ queryKey: ['notes'] })
+      await queryClient.invalidateQueries({ queryKey: ['notebooks'] })
       await queryClient.invalidateQueries({ queryKey: ['tags'] })
       await queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
       setIsDrawerOpen(false)
@@ -127,6 +150,7 @@ export function NotesPage() {
       try {
         await apiClient.delete(`/notes/${noteId}`)
         await queryClient.invalidateQueries({ queryKey: ['notes'] })
+        await queryClient.invalidateQueries({ queryKey: ['notebooks'] })
         await queryClient.invalidateQueries({ queryKey: ['tags'] })
         await queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
         setIsDrawerOpen(false)
@@ -169,9 +193,13 @@ export function NotesPage() {
         >
           <NotesSidebar
             notes={notesList}
+            notebooks={notebooksList}
             selectedNoteId={selectedNoteId}
             onSelectNote={handleSelectNote}
             onOpenCreateDrawer={openCreateDrawer}
+            onNotebookCreated={async () => {
+              await queryClient.invalidateQueries({ queryKey: ['notebooks'] })
+            }}
             search={search}
             setSearch={setSearch}
             tags={tagsData || []}
@@ -199,7 +227,7 @@ export function NotesPage() {
         </div>
       </div>
 
-      {/* Right-Side Slide Drawer for Creating / Editing Notes */}
+      {/* Centered Split-Pane Modal for Creating / Editing Notes */}
       <NoteDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
@@ -212,6 +240,9 @@ export function NotesPage() {
         setSource={setSource}
         tagsList={tagsList}
         setTagsList={setTagsList}
+        notebookId={notebookId}
+        setNotebookId={setNotebookId}
+        notebooks={notebooksList}
         onSave={handleSaveNote}
         onDelete={editingNote ? () => handleDeleteNote(editingNote.id) : undefined}
         isSaving={isSaving}
