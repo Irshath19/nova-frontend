@@ -34,9 +34,9 @@ export function TipTapEditor({
     },
   })
 
-  // Synchronize content if updated externally
+  // Synchronize content if updated externally (not during user active editing)
   React.useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
+    if (editor && !editor.isFocused && content !== editor.getHTML()) {
       editor.commands.setContent(content)
     }
   }, [content, editor])

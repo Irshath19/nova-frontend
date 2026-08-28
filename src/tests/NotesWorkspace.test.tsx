@@ -77,7 +77,7 @@ describe('Notes Knowledge Workspace', () => {
     expect(handleOpenCreate).toHaveBeenCalled()
   })
 
-  it('renders NoteDrawer right slide-in with inputs and save button', () => {
+  it('renders NoteDrawer as centered split-pane modal with editor and live preview', () => {
     const handleClose = vi.fn()
     const handleSave = vi.fn()
     const setTitle = vi.fn()
@@ -94,7 +94,7 @@ describe('Notes Knowledge Workspace', () => {
         setTitle={setTitle}
         content="<p>Test content</p>"
         setContent={setContent}
-        source=""
+        source="https://example.com"
         setSource={setSource}
         tagsList={['AI', 'Architecture']}
         setTagsList={setTagsList}
@@ -102,9 +102,48 @@ describe('Notes Knowledge Workspace', () => {
       />
     )
 
+    expect(screen.getByRole('dialog')).toBeDefined()
     expect(screen.getByText('Create Knowledge Note')).toBeDefined()
+    expect(screen.getByText('Live Preview')).toBeDefined()
+    expect(screen.getByText('Live Sync')).toBeDefined()
     expect(screen.getByText('Save Note')).toBeDefined()
-    expect(screen.getByText('#AI')).toBeDefined()
-    expect(screen.getByText('#Architecture')).toBeDefined()
+    expect(screen.getAllByText('#AI').length).toBeGreaterThanOrEqual(1)
+
+    // Check Escape key triggers close
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(handleClose).toHaveBeenCalled()
+  })
+
+  it('allows toggling between write and preview tabs on mobile views', () => {
+    const handleClose = vi.fn()
+    const handleSave = vi.fn()
+
+    render(
+      <NoteDrawer
+        isOpen={true}
+        onClose={handleClose}
+        isEditing={true}
+        title="Existing Note"
+        setTitle={vi.fn()}
+        content="<p>Some markdown note content</p>"
+        setContent={vi.fn()}
+        source=""
+        setSource={vi.fn()}
+        tagsList={['React']}
+        setTagsList={vi.fn()}
+        onSave={handleSave}
+      />
+    )
+
+
+    expect(screen.getByText('Edit Knowledge Note')).toBeDefined()
+    const previewTabBtn = screen.getByLabelText('Switch to Preview')
+    expect(previewTabBtn).toBeDefined()
+    fireEvent.click(previewTabBtn)
+
+    const writeTabBtn = screen.getByLabelText('Switch to Editor')
+    expect(writeTabBtn).toBeDefined()
+    fireEvent.click(writeTabBtn)
   })
 })
+
