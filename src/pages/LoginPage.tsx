@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Mail, Lock, Sparkles, KeyRound } from 'lucide-react'
+import { Mail, Lock } from 'lucide-react'
 
 export function LoginPage() {
   const { login } = useAuthStore()
@@ -29,11 +29,6 @@ export function LoginPage() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const fillDemoCredentials = () => {
-    setEmailOrUsername('demo@nova.ai')
-    setPassword('nova123456')
   }
 
   return (
@@ -64,7 +59,7 @@ export function LoginPage() {
               <label className="text-xs font-semibold text-foreground">Email or Username</label>
               <Input
                 type="text"
-                placeholder="you@nova.ai"
+                placeholder="you@domain.com or username"
                 value={emailOrUsername}
                 onChange={(e) => setEmailOrUsername(e.target.value)}
                 icon={<Mail className="w-4 h-4" />}
@@ -88,18 +83,6 @@ export function LoginPage() {
               Sign In to NOVA
             </Button>
           </form>
-
-          {/* Quick Demo Fill Button */}
-          <div className="pt-2 border-t border-border/60 text-center">
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="text-xs font-mono text-nova-400 hover:text-nova-300 transition-colors inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-nova-500/10 border border-nova-500/20"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Use Demo Account (demo@nova.ai)</span>
-            </button>
-          </div>
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
