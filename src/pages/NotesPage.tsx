@@ -1,30 +1,27 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { ApiResponse, Note, PaginatedResponse, SummarizeResponse, Tag } from '@/types'
-import { NoteCard } from '@/features/notes/NoteCard'
-import { TipTapEditor } from '@/features/notes/TipTapEditor'
+import { NotesSidebar } from '@/features/notes/NotesSidebar'
+import { NoteViewer } from '@/features/notes/NoteViewer'
+import { NoteDrawer } from '@/features/notes/NoteDrawer'
 import { AISummaryModal } from '@/features/notes/AISummaryModal'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
-import { Badge } from '@/components/ui/Badge'
-import { Plus, Search, Sparkles, Filter, Trash2, Edit3, Check } from 'lucide-react'
 
 export function NotesPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('detail')
 
-  // Modals state
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  // Drawer / Editor state
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [source, setSource] = useState('')
-  const [tagInput, setTagInput] = useState('')
   const [tagsList, setTagsList] = useState<string[]>([])
+  const [isSaving, setIsSaving] = useState(false)
 
   // AI Summarizer State
   const [isSummarizing, setIsSummarizing] = useState(false)
@@ -32,10 +29,10 @@ export function NotesPage() {
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false)
 
   // Fetch Notes
-  const { data, isLoading } = useQuery({
-    queryKey: ['notes', page, search, selectedTag],
+  const { data: notesData, isLoading: isNotesLoading } = useQuery({
+    queryKey: ['notes', search, selectedTag],
     queryFn: async () => {
-      const params: any = { page, limit: 18 }
+      const params: any = { limit: 100 }
       if (search) params.search = search
       if (selectedTag) params.tag_id = selectedTag
       const res = await apiClient.get<ApiResponse<PaginatedResponse<Note>>>('/notes', { params })
@@ -52,77 +49,101 @@ export function NotesPage() {
     },
   })
 
-  const openCreateModal = () => {
+  const notesList = notesData?.items || []
+
+  // Auto-select first note on initial load or if selected note is missing
+  useEffect(() => {
+    if (notesList.length > 0) {
+      if (!selectedNoteId || !notesList.some((n) => n.id === selectedNoteId)) {
+        setSelectedNoteId(notesList[0].id)
+      }
+    } else {
+      setSelectedNoteId(null)
+    }
+  }, [notesList, selectedNoteId])
+
+  const selectedNote = notesList.find((n) => n.id === selectedNoteId) || null
+
+  const handleSelectNote = (note: Note) => {
+    setSelectedNoteId(note.id)
+    setMobileView('detail')
+  }
+
+  const openCreateDrawer = () => {
     setEditingNote(null)
     setTitle('')
     setContent('<p></p>')
     setSource('')
     setTagsList([])
-    setIsEditorOpen(true)
+    setIsDrawerOpen(true)
   }
 
-  const openEditModal = (note: Note) => {
+  const openEditDrawer = (note: Note) => {
     setEditingNote(note)
     setTitle(note.title)
     setContent(note.content)
     setSource(note.source || '')
-    setTagsList(note.tags.map((t) => t.name))
-    setIsEditorOpen(true)
+    setTagsList(note.tags ? note.tags.map((t) => t.name) : [])
+    setIsDrawerOpen(true)
   }
 
   const handleSaveNote = async () => {
-    if (!content.trim() || !title.trim()) return
+    if (!content.trim() || !title.trim() || isSaving) return
+    setIsSaving(true)
 
-    if (editingNote) {
-      await apiClient.put(`/notes/${editingNote.id}`, {
-        title,
-        content,
-        source: source || null,
-        tag_names: tagsList,
-      })
-    } else {
-      await apiClient.post('/notes', {
-        title,
-        content,
-        source: source || null,
-        tag_names: tagsList,
-      })
+    try {
+      if (editingNote) {
+        const res = await apiClient.put<ApiResponse<Note>>(`/notes/${editingNote.id}`, {
+          title,
+          content,
+          source: source || null,
+          tag_names: tagsList,
+        })
+        setSelectedNoteId(res.data.data.id)
+      } else {
+        const res = await apiClient.post<ApiResponse<Note>>('/notes', {
+          title,
+          content,
+          source: source || null,
+          tag_names: tagsList,
+        })
+        setSelectedNoteId(res.data.data.id)
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['notes'] })
+      await queryClient.invalidateQueries({ queryKey: ['tags'] })
+      await queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
+      setIsDrawerOpen(false)
+      setMobileView('detail')
+    } catch (err) {
+      console.error('Failed to save note:', err)
+    } finally {
+      setIsSaving(false)
     }
-
-    queryClient.invalidateQueries({ queryKey: ['notes'] })
-    queryClient.invalidateQueries({ queryKey: ['tags'] })
-    queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
-    setIsEditorOpen(false)
   }
 
   const handleDeleteNote = async (noteId: string) => {
-    if (confirm('Are you sure you want to delete this note?')) {
-      await apiClient.delete(`/notes/${noteId}`)
-      queryClient.invalidateQueries({ queryKey: ['notes'] })
-      queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
-      setIsEditorOpen(false)
-    }
-  }
-
-  const handleAddTag = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && tagInput.trim()) {
-      e.preventDefault()
-      if (!tagsList.includes(tagInput.trim())) {
-        setTagsList([...tagsList, tagInput.trim()])
+    if (confirm('Are you sure you want to delete this knowledge note?')) {
+      try {
+        await apiClient.delete(`/notes/${noteId}`)
+        await queryClient.invalidateQueries({ queryKey: ['notes'] })
+        await queryClient.invalidateQueries({ queryKey: ['tags'] })
+        await queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
+        setIsDrawerOpen(false)
+        if (selectedNoteId === noteId) {
+          const remaining = notesList.filter((n) => n.id !== noteId)
+          setSelectedNoteId(remaining.length > 0 ? remaining[0].id : null)
+        }
+      } catch (err) {
+        console.error('Failed to delete note:', err)
       }
-      setTagInput('')
     }
-  }
-
-  const handleRemoveTag = (tagName: string) => {
-    setTagsList(tagsList.filter((t) => t !== tagName))
   }
 
   const handleTriggerAISummarizer = async () => {
     if (!content || isSummarizing) return
     setIsSummarizing(true)
     try {
-      // Strip HTML tags for clean summarization
       const textOnly = content.replace(/<[^>]*>?/gm, ' ')
       const res = await apiClient.post<ApiResponse<SummarizeResponse>>('/ai/summarize', {
         content: textOnly,
@@ -137,198 +158,66 @@ export function NotesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-extrabold text-foreground tracking-tight">Captured Notes</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Capture, synthesize and organize atomic knowledge notes.
-          </p>
-        </div>
-
-        <Button onClick={openCreateModal} size="md" className="shrink-0 shadow-lg shadow-nova-500/20">
-          <Plus className="w-4 h-4 mr-1.5" />
-          Create Note
-        </Button>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-card/60 border border-border/80 backdrop-blur-md">
-        <div className="flex-1 min-w-[200px] max-w-md">
-          <Input
-            placeholder="Search notes by title or content..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(1)
-            }}
-            icon={<Search className="w-4 h-4" />}
-            className="h-9 text-xs"
+    <div className="w-full h-[calc(100vh-6.5rem)] md:h-[calc(100vh-5.5rem)] max-w-7xl mx-auto flex flex-col">
+      {/* 2-Column Knowledge Management Workspace */}
+      <div className="flex-1 flex rounded-3xl border border-border/80 bg-card/30 backdrop-blur-md overflow-hidden shadow-2xl">
+        {/* Left Notes Sidebar */}
+        <div
+          className={`h-full ${
+            mobileView === 'list' ? 'flex w-full' : 'hidden md:flex'
+          }`}
+        >
+          <NotesSidebar
+            notes={notesList}
+            selectedNoteId={selectedNoteId}
+            onSelectNote={handleSelectNote}
+            onOpenCreateDrawer={openCreateDrawer}
+            search={search}
+            setSearch={setSearch}
+            tags={tagsData || []}
+            selectedTag={selectedTag}
+            setSelectedTag={setSelectedTag}
+            isLoading={isNotesLoading}
           />
         </div>
 
-        {/* Tags Filter Chips */}
-        {tagsData && tagsData.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-            <button
-              onClick={() => setSelectedTag(null)}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-medium transition-all ${
-                selectedTag === null
-                  ? 'bg-nova-500 text-white font-semibold shadow-sm'
-                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All Tags
-            </button>
-            {tagsData.slice(0, 8).map((tag) => (
-              <button
-                key={tag.id}
-                onClick={() => setSelectedTag(tag.id === selectedTag ? null : tag.id)}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-medium transition-all ${
-                  selectedTag === tag.id
-                    ? 'bg-nova-500 text-white font-semibold shadow-sm'
-                    : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                #{tag.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Right Large Note Viewing Workspace */}
+        <div
+          className={`flex-1 h-full ${
+            mobileView === 'detail' ? 'flex' : 'hidden md:flex'
+          }`}
+        >
+          <NoteViewer
+            note={selectedNote}
+            onEdit={openEditDrawer}
+            onDelete={handleDeleteNote}
+            onTagClick={(tagId) => setSelectedTag(tagId)}
+            onBackToList={() => setMobileView('list')}
+            onCreateNew={openCreateDrawer}
+            isLoading={isNotesLoading}
+          />
+        </div>
       </div>
 
-      {/* Notes Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-52 rounded-2xl bg-card/40 border border-border/40 animate-pulse" />
-          ))}
-        </div>
-      ) : data?.items && data.items.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data.items.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onClick={() => openEditModal(note)}
-              onTagClick={(tagId) => setSelectedTag(tagId)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-16 rounded-3xl border border-dashed border-border/80 bg-card/20 space-y-3">
-          <Sparkles className="w-8 h-8 text-muted-foreground/50 mx-auto" />
-          <h3 className="font-semibold text-sm text-foreground">No notes found</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            {search || selectedTag
-              ? 'Try clearing your filters to see all notes.'
-              : 'Create your first note or use Quick Capture on the dashboard.'}
-          </p>
-          <Button onClick={openCreateModal} size="sm" variant="outline" className="mt-2 text-xs">
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Create Note
-          </Button>
-        </div>
-      )}
-
-      {/* Note Editor & Detail Modal */}
-      <Modal
-        isOpen={isEditorOpen}
-        onClose={() => setIsEditorOpen(false)}
-        title={editingNote ? 'Edit Knowledge Note' : 'Create Knowledge Note'}
-        description="TipTap Markdown-compatible rich editor with automated AI structuring."
-        maxWidth="4xl"
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              placeholder="Note Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="font-semibold text-sm"
-            />
-            <Input
-              placeholder="Source URL or Documentation link (optional)"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              className="text-xs"
-            />
-          </div>
-
-          {/* Tags Input */}
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {tagsList.map((tag) => (
-                <Badge key={tag} variant="secondary" className="gap-1">
-                  <span>#{tag}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-destructive"
-                  >
-                    ×
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <Input
-              placeholder="Type tag and press Enter..."
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleAddTag}
-              className="h-8 text-xs"
-            />
-          </div>
-
-          {/* TipTap Rich Editor */}
-          <TipTapEditor
-            content={content}
-            onChange={(newContent) => setContent(newContent)}
-            className="min-h-[260px]"
-          />
-
-          {/* Actions & AI Summarizer Button */}
-          <div className="flex items-center justify-between pt-4 border-t border-border/50">
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleTriggerAISummarizer}
-                isLoading={isSummarizing}
-                disabled={!content.trim()}
-              >
-                <Sparkles className="w-3.5 h-3.5 mr-1 text-nova-400" />
-                AI Synthesize & Summarize
-              </Button>
-
-              {editingNote && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteNote(editingNote.id)}
-                  className="text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-1" />
-                  Delete
-                </Button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsEditorOpen(false)}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveNote} disabled={!title.trim() || !content.trim()}>
-                <Check className="w-3.5 h-3.5 mr-1" />
-                Save Note
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      {/* Right-Side Slide Drawer for Creating / Editing Notes */}
+      <NoteDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        isEditing={!!editingNote}
+        title={title}
+        setTitle={setTitle}
+        content={content}
+        setContent={setContent}
+        source={source}
+        setSource={setSource}
+        tagsList={tagsList}
+        setTagsList={setTagsList}
+        onSave={handleSaveNote}
+        onDelete={editingNote ? () => handleDeleteNote(editingNote.id) : undefined}
+        isSaving={isSaving}
+        isSummarizing={isSummarizing}
+        onTriggerAISummarizer={handleTriggerAISummarizer}
+      />
 
       {/* AI Summary Preview Modal */}
       <AISummaryModal
@@ -342,3 +231,4 @@ export function NotesPage() {
     </div>
   )
 }
+export default NotesPage
