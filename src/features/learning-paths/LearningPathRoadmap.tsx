@@ -3,12 +3,13 @@ import { LearningPath, PathItemStatus } from '@/types'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { CheckCircle2, Circle, Clock, ArrowRight, Trash2 } from 'lucide-react'
+import { CheckCircle2, Circle, Clock, ArrowRight, Trash2, Edit3 } from 'lucide-react'
 
 interface LearningPathRoadmapProps {
   path: LearningPath
   onUpdateStatus: (pathId: string, itemId: string, status: PathItemStatus) => Promise<void>
   onSelectConcept?: (conceptId: string) => void
+  onEditPath?: (path: LearningPath) => void
   onDeletePath?: (pathId: string) => void
 }
 
@@ -16,6 +17,7 @@ export function LearningPathRoadmap({
   path,
   onUpdateStatus,
   onSelectConcept,
+  onEditPath,
   onDeletePath,
 }: LearningPathRoadmapProps) {
   const progressPct =
@@ -50,16 +52,29 @@ export function LearningPathRoadmap({
           )}
         </div>
 
-        {onDeletePath && (
-          <button
-            onClick={() => onDeletePath(path.id)}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            title="Delete Path"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {onEditPath && (
+            <button
+              onClick={() => onEditPath(path)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-nova-400 hover:bg-nova-500/10 transition-colors"
+              title="Edit Learning Path"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+
+          {onDeletePath && (
+            <button
+              onClick={() => onDeletePath(path.id)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete Path"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
 
       {/* Progress Bar */}
       <div className="space-y-2">

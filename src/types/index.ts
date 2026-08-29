@@ -110,7 +110,9 @@ export interface LearningPathStepInput {
   title: string
   description?: string
   concept_id?: string
+  status?: PathItemStatus
 }
+
 
 export interface LearningPathItem {
   id: string

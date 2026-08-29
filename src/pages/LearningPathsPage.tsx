@@ -22,6 +22,7 @@ export function LearningPathsPage() {
   const queryClient = useQueryClient()
   const [isAIModalOpen, setIsAIModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [editingPath, setEditingPath] = useState<LearningPath | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [steps, setSteps] = useState<LearningPathStepInput[]>([
@@ -30,7 +31,6 @@ export function LearningPathsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Concept Detail Modal state
-  const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null)
   const [selectedConceptDetail, setSelectedConceptDetail] = useState<ConceptDetail | null>(null)
 
   // Fetch Paths
@@ -81,9 +81,27 @@ export function LearningPathsPage() {
   }
 
   const openCreateModal = () => {
+    setEditingPath(null)
     setNewTitle('')
     setNewDesc('')
     setSteps([{ title: '', description: '' }])
+    setIsCreateModalOpen(true)
+  }
+
+  const handleOpenEditModal = (path: LearningPath) => {
+    setEditingPath(path)
+    setNewTitle(path.title)
+    setNewDesc(path.description || '')
+    const existingSteps: LearningPathStepInput[] =
+      path.items.length > 0
+        ? path.items.map((i) => ({
+            title: i.title || i.concept?.name || '',
+            description: i.description || i.concept?.description || '',
+            status: i.status,
+            concept_id: i.concept_id || undefined,
+          }))
+        : [{ title: '', description: '' }]
+    setSteps(existingSteps)
     setIsCreateModalOpen(true)
   }
 
@@ -108,7 +126,7 @@ export function LearningPathsPage() {
     })
   }
 
-  const handleCreateCustomPath = async (e: React.FormEvent) => {
+  const handleSubmitPathForm = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTitle.trim() || isSubmitting) return
 
@@ -117,6 +135,8 @@ export function LearningPathsPage() {
       .map((s) => ({
         title: s.title.trim(),
         description: s.description?.trim() || undefined,
+        status: s.status,
+        concept_id: s.concept_id,
       }))
       .filter((s) => s.title.length > 0)
 
@@ -127,17 +147,26 @@ export function LearningPathsPage() {
 
     setIsSubmitting(true)
     try {
-      await apiClient.post('/learning-paths', {
-        title: newTitle.trim(),
-        description: newDesc.trim() || undefined,
-        steps: validSteps,
-      })
+      if (editingPath) {
+        await apiClient.put(`/learning-paths/${editingPath.id}`, {
+          title: newTitle.trim(),
+          description: newDesc.trim() || undefined,
+          steps: validSteps,
+        })
+      } else {
+        await apiClient.post('/learning-paths', {
+          title: newTitle.trim(),
+          description: newDesc.trim() || undefined,
+          steps: validSteps,
+        })
+      }
 
       setIsCreateModalOpen(false)
+      setEditingPath(null)
       queryClient.invalidateQueries({ queryKey: ['learning_paths'] })
       queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
     } catch (err) {
-      console.error('Failed to create custom learning path:', err)
+      console.error('Failed to save learning path:', err)
     } finally {
       setIsSubmitting(false)
     }
@@ -189,6 +218,7 @@ export function LearningPathsPage() {
               key={path.id}
               path={path}
               onUpdateStatus={handleUpdateItemStatus}
+              onEditPath={handleOpenEditModal}
               onDeletePath={handleDeletePath}
               onSelectConcept={handleSelectConcept}
             />
@@ -215,15 +245,22 @@ export function LearningPathsPage() {
         onSavePath={handleSaveAIGeneratedPath}
       />
 
-      {/* Custom Multi-Step Path Creator Modal */}
+      {/* Custom Multi-Step Path Creator/Editor Modal */}
       <Modal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Create Custom Learning Path"
-        description="Set your goal and add step-by-step milestones to achieve it."
+        onClose={() => {
+          setIsCreateModalOpen(false)
+          setEditingPath(null)
+        }}
+        title={editingPath ? 'Edit Learning Path' : 'Create Custom Learning Path'}
+        description={
+          editingPath
+            ? 'Update your goal, milestone steps, or reorganize your curriculum.'
+            : 'Set your goal and add step-by-step milestones to achieve it.'
+        }
         maxWidth="lg"
       >
-        <form onSubmit={handleCreateCustomPath} className="space-y-5 max-h-[75vh] flex flex-col">
+        <form onSubmit={handleSubmitPathForm} className="space-y-5 max-h-[75vh] flex flex-col">
           <div className="space-y-4 overflow-y-auto pr-1">
             {/* Goal Title */}
             <div className="space-y-1.5">
@@ -332,7 +369,15 @@ export function LearningPathsPage() {
             </span>
 
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsCreateModalOpen(false)
+                  setEditingPath(null)
+                }}
+              >
                 Cancel
               </Button>
               <Button
@@ -342,7 +387,7 @@ export function LearningPathsPage() {
                 isLoading={isSubmitting}
                 className="shadow-md shadow-nova-500/20"
               >
-                Create Learning Path
+                {editingPath ? 'Save Changes' : 'Create Learning Path'}
               </Button>
             </div>
           </div>
