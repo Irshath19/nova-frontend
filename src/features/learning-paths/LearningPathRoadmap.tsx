@@ -109,14 +109,15 @@ export function LearningPathRoadmap({
                         : 'text-foreground'
                     }`}
                   >
-                    {item.concept?.name || `Step ${idx + 1}`}
+                    {item.title || item.concept?.name || `Step ${idx + 1}`}
                   </h4>
                 </div>
-                {item.concept?.description && (
+                {(item.description || item.concept?.description) && (
                   <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                    {item.concept.description}
+                    {item.description || item.concept?.description}
                   </p>
                 )}
+
               </div>
             </div>
 
@@ -125,7 +126,9 @@ export function LearningPathRoadmap({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onSelectConcept(item.concept_id)}
+                  onClick={() => {
+                    if (item.concept_id) onSelectConcept(item.concept_id)
+                  }}
                   className="text-xs h-7 px-2"
                 >
                   <span>Explore</span>
@@ -133,6 +136,7 @@ export function LearningPathRoadmap({
                 </Button>
               )}
             </div>
+
           </div>
         ))}
       </div>

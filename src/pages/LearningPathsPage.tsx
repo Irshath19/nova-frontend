@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import {
   ApiResponse,
   ConceptDetail,
   GeneratedPathStep,
   LearningPath,
+  LearningPathStepInput,
   PathItemStatus,
 } from '@/types'
 import { LearningPathRoadmap } from '@/features/learning-paths/LearningPathRoadmap'
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
-import { Plus, Sparkles, Compass } from 'lucide-react'
+import { Plus, Sparkles, Compass, Trash2, Layers } from 'lucide-react'
 
 export function LearningPathsPage() {
   const queryClient = useQueryClient()
@@ -23,6 +24,10 @@ export function LearningPathsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [steps, setSteps] = useState<LearningPathStepInput[]>([
+    { title: '', description: '' },
+  ])
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Concept Detail Modal state
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null)
@@ -60,44 +65,82 @@ export function LearningPathsPage() {
     description: string
     steps: GeneratedPathStep[]
   }) => {
-    // 1. Ensure concepts exist or create them
-    const conceptIds: string[] = []
-    for (const s of pathData.steps) {
-      const cRes = await apiClient.post<ApiResponse<{ id: string }>>('/concepts', {
-        name: s.concept_name || s.title,
-        description: s.description,
-        knowledge_level: 'NEW',
-      })
-      conceptIds.push(cRes.data.data.id)
-    }
+    const formattedSteps: LearningPathStepInput[] = pathData.steps.map((s) => ({
+      title: s.title || s.concept_name,
+      description: s.description,
+    }))
 
-    // 2. Create the learning path with those concept IDs
     await apiClient.post('/learning-paths', {
       title: pathData.title,
       description: pathData.description,
-      concept_ids: conceptIds,
+      steps: formattedSteps,
     })
 
     queryClient.invalidateQueries({ queryKey: ['learning_paths'] })
-    queryClient.invalidateQueries({ queryKey: ['concepts'] })
     queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
+  }
+
+  const openCreateModal = () => {
+    setNewTitle('')
+    setNewDesc('')
+    setSteps([{ title: '', description: '' }])
+    setIsCreateModalOpen(true)
+  }
+
+  const handleAddStep = () => {
+    setSteps((prev) => [...prev, { title: '', description: '' }])
+  }
+
+  const handleRemoveStep = (index: number) => {
+    if (steps.length <= 1) return
+    setSteps((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleStepChange = (
+    index: number,
+    field: 'title' | 'description',
+    value: string
+  ) => {
+    setSteps((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
   }
 
   const handleCreateCustomPath = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTitle.trim()) return
+    if (!newTitle.trim() || isSubmitting) return
 
-    await apiClient.post('/learning-paths', {
-      title: newTitle.trim(),
-      description: newDesc.trim() || undefined,
-      concept_ids: [],
-    })
+    // Filter out steps with empty titles
+    const validSteps = steps
+      .map((s) => ({
+        title: s.title.trim(),
+        description: s.description?.trim() || undefined,
+      }))
+      .filter((s) => s.title.length > 0)
 
-    setNewTitle('')
-    setNewDesc('')
-    setIsCreateModalOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['learning_paths'] })
-    queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
+    if (validSteps.length === 0) {
+      alert('Please provide at least one step for your learning path.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await apiClient.post('/learning-paths', {
+        title: newTitle.trim(),
+        description: newDesc.trim() || undefined,
+        steps: validSteps,
+      })
+
+      setIsCreateModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['learning_paths'] })
+      queryClient.invalidateQueries({ queryKey: ['progress_metrics'] })
+    } catch (err) {
+      console.error('Failed to create custom learning path:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleSelectConcept = async (conceptId: string) => {
@@ -121,7 +164,7 @@ export function LearningPathsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="md" onClick={() => setIsCreateModalOpen(true)}>
+          <Button variant="secondary" size="md" onClick={openCreateModal}>
             <Plus className="w-4 h-4 mr-1.5" />
             Custom Path
           </Button>
@@ -172,41 +215,136 @@ export function LearningPathsPage() {
         onSavePath={handleSaveAIGeneratedPath}
       />
 
-      {/* Custom Path Modal */}
+      {/* Custom Multi-Step Path Creator Modal */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Create Learning Path"
-        description="Define a new goal-oriented learning path."
-        maxWidth="md"
+        title="Create Custom Learning Path"
+        description="Set your goal and add step-by-step milestones to achieve it."
+        maxWidth="lg"
       >
-        <form onSubmit={handleCreateCustomPath} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Path Title</label>
-            <Input
-              placeholder="e.g. Master Distributed Systems Architecture"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              required
-            />
+        <form onSubmit={handleCreateCustomPath} className="space-y-5 max-h-[75vh] flex flex-col">
+          <div className="space-y-4 overflow-y-auto pr-1">
+            {/* Goal Title */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span>Goal / Title</span>
+                <span className="text-[10px] text-muted-foreground font-normal">Required</span>
+              </label>
+              <Input
+                placeholder="e.g. AI Engineering, Full Stack System Design"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="font-semibold text-sm h-10"
+                required
+              />
+            </div>
+
+            {/* Goal Description */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground/80">
+                Goal Description <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+              </label>
+              <Textarea
+                placeholder="Brief summary of objectives and competencies to achieve..."
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                rows={2}
+                className="text-xs resize-none"
+              />
+            </div>
+
+            <div className="pt-2 border-t border-border/60">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-nova-400" />
+                  <h4 className="text-xs font-bold text-foreground">Roadmap Steps</h4>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-muted text-muted-foreground">
+                    {steps.length}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">Add steps in sequential order</span>
+              </div>
+
+              {/* Dynamic Steps List */}
+              <div className="space-y-3">
+                {steps.map((step, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl border border-border/80 bg-card/60 space-y-2 relative group transition-colors hover:border-border"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-nova-500/15 text-nova-400 border border-nova-500/20">
+                          Step {idx + 1}
+                        </span>
+                      </div>
+
+                      {steps.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStep(idx)}
+                          className="p-1 rounded-md text-muted-foreground/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Remove Step"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Input
+                        placeholder={`Step ${idx + 1} Title (e.g. ${
+                          idx === 0 ? 'Python' : idx === 1 ? 'NumPy & Pandas' : 'Deep Learning'
+                        })`}
+                        value={step.title}
+                        onChange={(e) => handleStepChange(idx, 'title', e.target.value)}
+                        className="h-8 text-xs font-medium bg-background/60"
+                        required
+                      />
+                      <Input
+                        placeholder="Description (e.g. Learn core Python, OOP, and data structures)"
+                        value={step.description || ''}
+                        onChange={(e) => handleStepChange(idx, 'description', e.target.value)}
+                        className="h-7 text-[11px] bg-background/40 text-muted-foreground focus:text-foreground"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Step Button */}
+              <button
+                type="button"
+                onClick={handleAddStep}
+                className="mt-3 w-full py-2.5 rounded-xl border border-dashed border-nova-500/30 hover:border-nova-500/60 bg-nova-500/5 hover:bg-nova-500/10 text-nova-400 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Next Step</span>
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Goal Description</label>
-            <Textarea
-              placeholder="Summary of objectives and competencies to achieve..."
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-            />
-          </div>
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-4 border-t border-border/60 shrink-0">
+            <span className="text-[11px] text-muted-foreground">
+              {steps.filter((s) => s.title.trim()).length} steps configured
+            </span>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/50">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={!newTitle.trim()}>
-              Create Path
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!newTitle.trim() || steps.every((s) => !s.title.trim()) || isSubmitting}
+                isLoading={isSubmitting}
+                className="shadow-md shadow-nova-500/20"
+              >
+                Create Learning Path
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -220,3 +358,4 @@ export function LearningPathsPage() {
     </div>
   )
 }
+export default LearningPathsPage

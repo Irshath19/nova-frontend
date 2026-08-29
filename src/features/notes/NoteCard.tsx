@@ -37,14 +37,16 @@ export function NoteCard({ note, onClick, onTagClick, onConceptClick }: NoteCard
               <Sparkles className="w-3 h-3" />
               <span>AI Summary</span>
             </div>
-            <p className="line-clamp-2">{note.summary}</p>
+            <p className="line-clamp-2">
+              {note.summary.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()}
+            </p>
           </div>
         ) : (
-          <div
-            className="text-xs text-muted-foreground line-clamp-3 mb-3 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: note.content }}
-          />
+          <p className="text-xs text-muted-foreground line-clamp-3 mb-3 leading-relaxed">
+            {note.content.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()}
+          </p>
         )}
+
       </div>
 
       <div>

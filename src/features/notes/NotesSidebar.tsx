@@ -66,10 +66,11 @@ export function NotesSidebar({
 
   // Helper to extract clean plain text preview from HTML
   const getPreviewText = (note: Note) => {
-    if (note.summary) return note.summary
-    const text = note.content.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()
+    const raw = note.summary || note.content || ''
+    const text = raw.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()
     return text || 'No content'
   }
+
 
   return (
     <>

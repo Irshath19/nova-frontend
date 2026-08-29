@@ -106,10 +106,18 @@ export interface GraphResponse {
   edges: GraphEdge[]
 }
 
+export interface LearningPathStepInput {
+  title: string
+  description?: string
+  concept_id?: string
+}
+
 export interface LearningPathItem {
   id: string
   learning_path_id: string
-  concept_id: string
+  title: string
+  description?: string | null
+  concept_id?: string | null
   position: number
   status: PathItemStatus
   concept?: Concept | null
@@ -126,6 +134,7 @@ export interface LearningPath {
   completed_items: number
   items: LearningPathItem[]
 }
+
 
 export interface GeneratedPathStep {
   title: string

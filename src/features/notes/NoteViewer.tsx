@@ -219,10 +219,11 @@ export function NoteViewer({
                 <span>AI Knowledge Synthesis</span>
               </div>
               <p className="text-sm text-foreground/90 leading-relaxed font-normal">
-                {note.summary}
+                {note.summary.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()}
               </p>
             </div>
           )}
+
 
           {/* Note Rich Content Display */}
           <div className="pt-2 border-t border-border/40">
